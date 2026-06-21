@@ -47,6 +47,8 @@ function App() {
   const [searchResponse, setSearchResponse] = useState(null)
   const [trending, setTrending] = useState([])
   const [trendingError, setTrendingError] = useState(null)
+  const [debugInfo, setDebugInfo] = useState(null)
+
 
   const inputRef = useRef(null)
   const requestIdRef = useRef(0)
@@ -119,6 +121,34 @@ function App() {
 
     return () => controller.abort()
   }, [debouncedQuery])
+
+  // Cache Debug Fetcher
+  useEffect(() => {
+    const trimmed = debouncedQuery.trim()
+    if (!trimmed) {
+      setDebugInfo(null)
+      return
+    }
+
+    const controller = new AbortController()
+    fetch(`${API_BASE}/cache/debug?prefix=${encodeURIComponent(trimmed)}`, {
+      signal: controller.signal,
+      headers: { 'X-User-Id': userId }
+    })
+      .then(res => {
+        if (!res.ok) throw new Error()
+        return res.json()
+      })
+      .then(data => {
+        setDebugInfo(data)
+      })
+      .catch(() => {
+        // Silently catch aborts or errors
+      })
+
+    return () => controller.abort()
+  }, [debouncedQuery])
+
 
   const submitSearch = useCallback(async (raw) => {
     const value = (raw ?? query).trim()
@@ -318,7 +348,10 @@ function App() {
             </ol>
           )}
         </section>
+
+        <CacheDebugger debugInfo={debugInfo} />
       </main>
+
 
       <footer className="footer">
         <span>Tip: use ↑ / ↓ to navigate suggestions, Enter to search, Esc to close.</span>
@@ -341,4 +374,61 @@ function HighlightMatch({ text, match }) {
   )
 }
 
+function CacheDebugger({ debugInfo }) {
+  const [isOpen, setIsOpen] = useState(true)
+
+  if (!debugInfo) return null
+
+  return (
+    <div className="debug-panel">
+      <div className="debug-header" onClick={() => setIsOpen(!isOpen)}>
+        <h3>🔍 Cache Routing & Performance</h3>
+        <button type="button" className="toggle-btn">
+          {isOpen ? 'Hide' : 'Show'}
+        </button>
+      </div>
+      
+      {isOpen && (
+        <div className="debug-content">
+          <div className="debug-item">
+            <span className="debug-label">Prefix</span>
+            <span className="debug-value">{debugInfo.prefix}</span>
+          </div>
+          <div className="debug-item">
+            <span className="debug-label">Consistent Hash Key</span>
+            <span className="debug-value">{debugInfo.cacheKey}</span>
+          </div>
+          <div className="debug-item">
+            <span className="debug-label">Responsible Redis Node</span>
+            <span className="debug-value">{debugInfo.responsibleNode || 'N/A'}</span>
+          </div>
+          <div className="debug-item">
+            <span className="debug-label">L1 Local Cache (Memory)</span>
+            <div>
+              <span className={`badge ${debugInfo.L1?.status?.toLowerCase() === 'hit' ? 'hit' : 'miss'}`}>
+                {debugInfo.L1?.status}
+              </span>
+            </div>
+          </div>
+          <div className="debug-item">
+            <span className="debug-label">L2 Distributed Cache (Redis)</span>
+            <div>
+              <span className={`badge ${debugInfo.L2?.status?.toLowerCase() === 'hit' ? 'hit' : 'miss'}`}>
+                {debugInfo.L2?.status}
+              </span>
+            </div>
+          </div>
+          <div className="debug-item">
+            <span className="debug-label">Cache Level Result</span>
+            <span className="debug-value" style={{ fontWeight: 600, color: debugInfo.L1?.status === 'HIT' ? '#10b981' : (debugInfo.L2?.status === 'HIT' ? '#3b82f6' : '#f59e0b') }}>
+              {debugInfo.L1?.status === 'HIT' ? 'L1 Memory HIT (0ms)' : (debugInfo.L2?.status === 'HIT' ? 'L2 Redis HIT' : 'L3 DB Fallback (MISS)')}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default App
+

@@ -334,3 +334,104 @@
   color: var(--text);
   border-top: 1px solid var(--border);
 }
+
+/* --- Cache Debugger Dashboard --- */
+.debug-panel {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--code-bg);
+  padding: 16px 20px;
+  font-family: var(--sans);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 60px;
+}
+
+.debug-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  cursor: pointer;
+}
+
+.debug-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.debug-header .toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.debug-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  font-size: 14px;
+}
+
+@media (max-width: 600px) {
+  .debug-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+.debug-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.debug-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text);
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.debug-value {
+  font-family: monospace;
+  font-size: 13px;
+  color: var(--text-h);
+  word-break: break-all;
+  background: var(--bg);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.badge.hit {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge.miss {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+

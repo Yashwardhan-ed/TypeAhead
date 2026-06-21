@@ -170,6 +170,75 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
+app.get("/api/cache/debug", async (req, res) => {
+  const prefix = req.query.prefix?.toLowerCase();
+  const userId = req.header("X-User-Id") || 'anonymous';
+
+  if (!prefix) {
+    return res.status(400).json({ error: "prefix query parameter is required" });
+  }
+
+  let cacheKey;
+  let l1Hit = false;
+  let l2Hit = false;
+  let responsibleNode = null;
+  let cachedData = null;
+
+  // 1. Determine caching tier based on prefix length
+  if (prefix.length <= 3) {
+    // Personalized Caching (e.g. trending:user_123:wat)
+    cacheKey = `trending:${userId}:${prefix}`;
+    const localResult = localLRUCache.get(cacheKey);
+    l1Hit = localResult !== undefined;
+
+    responsibleNode = hashring.get(cacheKey);
+    const redisClient = clusterClients[responsibleNode];
+    try {
+      const redisResult = await redisClient.get(cacheKey);
+      l2Hit = redisResult !== null && redisResult !== undefined;
+      if (l2Hit) {
+        cachedData = JSON.parse(redisResult);
+      }
+    } catch (err) {
+      console.error(`Error querying Redis node ${responsibleNode}:`, err);
+    }
+  } else {
+    // Standard Prefix Caching (e.g. prefix:notebook)
+    cacheKey = `prefix:${prefix}`;
+    
+    // In server_v1.js, L1 stores queries under the key 'prefix'
+    const localResult = localLRUCache.get(prefix);
+    l1Hit = localResult !== undefined;
+
+    responsibleNode = hashring.get(cacheKey);
+    const redisClient = clusterClients[responsibleNode];
+    try {
+      const redisResult = await redisClient.get(cacheKey);
+      l2Hit = redisResult !== null && redisResult !== undefined;
+      if (l2Hit) {
+        cachedData = JSON.parse(redisResult);
+      }
+    } catch (err) {
+      console.error(`Error querying Redis node ${responsibleNode}:`, err);
+    }
+  }
+
+  return res.json({
+    prefix,
+    cacheKey,
+    responsibleNode,
+    L1: {
+      status: l1Hit ? "HIT" : "MISS",
+      key: prefix.length <= 3 ? cacheKey : prefix
+    },
+    L2: {
+      status: l2Hit ? "HIT" : "MISS",
+      key: cacheKey,
+      data: cachedData
+    }
+  });
+});
+
 async function initializeServers() {
   
   for (const node of redisNodes) {
@@ -268,12 +337,24 @@ async function getPersonlizedSuggestions(userId, prefix) {
   try {
     let globalItems = [];
     if(!prefix) {
+      // const dbResult = await pool.query(
+      //   `
+      //   SELECT final_search_term AS value, MAX(popularity) AS popularity
+      //   FROM queries 
+      //   GROUP BY final_search_term
+      //   ORDER BY popularity DESC LIMIT 50;
+      //   `
+      // );
       const dbResult = await pool.query(
         `
-        SELECT final_search_term AS value, MAX(popularity) AS popularity
-        FROM queries 
-        GROUP BY final_search_term
-        ORDER BY popularity DESC LIMIT 50;
+          SELECT final_search_term AS value, MAX(popularity) AS popularity FROM (
+            SELECT final_search_term, popularity 
+            FROM queries 
+            ORDER BY popularity DESC 
+            LIMIT 500
+          ) AS sub
+          GROUP BY final_search_term
+          ORDER BY popularity DESC LIMIT 50;
         `
       );
       globalItems = dbResult.rows;
